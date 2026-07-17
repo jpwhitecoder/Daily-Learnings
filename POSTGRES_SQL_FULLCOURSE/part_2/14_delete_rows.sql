@@ -1,0 +1,2 @@
+DELETE FROM products
+WHERE sku='FURN-DSK-001';
