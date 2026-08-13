@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "backend_basic_post_project",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -10,7 +10,11 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@imagekit/nodejs": "^7.10.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "mongoose": "^9.9.1"
+    "mongoose": "^9.9.1",
+    "multer": "^2.2.0"
   }
 }
