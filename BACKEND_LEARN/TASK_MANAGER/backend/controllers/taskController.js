@@ -1,4 +1,5 @@
 // const Task = require("../models/Task");
+const Task = require("../models/Task");
 const TaskModel = require("../models/Task");
 
 // @desc Get all tasks (Admin: all, User: only assigned tasks)
@@ -172,6 +173,14 @@ const updateTask = async (req, res) => {
 const deleteTask = async (req, res) => {
     try{
 
+        const task = await TaskModel.findById(req.params.id);
+
+        if(!task) return res.status(404).json({message:"Task not found"});
+
+        await task.deleteOne();
+
+        res.json({message:"Task deleted succeessfully"});
+
     }catch(error){
         res.status(500).json({message:"server error",error: error.message})
     }
@@ -183,6 +192,28 @@ const deleteTask = async (req, res) => {
 
 const updateTaskStatus = async (req, res) => {
     try{
+        const task = await Task.findById(req.params.id);
+
+        if(!task) return res.status(404).json({message:"Task not found"});
+
+        const isAssigned = task.assignedTo.some(
+            (userId) => userId.toString() === req.user._id.toString()
+        );
+
+        if(!isAssigned && req.user.role !== "admin"){
+            return res.status(403).json({message:"Not authorized"});
+        }
+
+        task.status= req.body.status || task.status;
+
+        if(task.status === "Completed"){
+            task.todoCheckList.forEach( (item) => (item.completed = true));
+            task.progress = 100;
+        }
+
+        await task.save();
+
+        res.json({ message:"task status updted", task })
 
     }catch(error){
         res.status(500).json({message:"server error",error: error.message})
@@ -194,7 +225,46 @@ const updateTaskStatus = async (req, res) => {
 // @access Private
 
 const updateTaskChecklist = async (req, res) => {
+
     try{
+
+        const { todoCheckList } = req.body;
+        
+        const task = await TaskModel.findById(req.params.id);
+
+        if(!task) return res.status(404).json({message:"Task not found"})
+
+        // const isAssigned = task.assignedTo.some((userID) => userID.toString() === (req.user._id).toString())   
+
+        if( !task.assignedTo.includes(req.user._id) && req.user.role !== "admin"){
+            return res.status(403).json({message:"Not authorized to update checklist"})
+        }
+
+        task.todoCheckList = todoCheckList;
+
+        // Auto update progresss based on checklist completion
+
+        const completedCount = task.todoCheckList.filter((item) => item.completed).length;
+        const totalItems = task.todoCheckList.length;
+
+        task.progress = totalItems > 0  ? Math.round((completedCount/totalItems) * 100) : 0;
+
+        //Auto-mark as completed if all items are checked
+        if(task.progress === 100){
+            task.status = "Completed";
+        }else if(task.progress > 0){
+            task.status = "In Progress"
+        }else{
+            task.status = "Pending";
+        }
+
+        await task.save();
+
+        const updatedTask = await TaskModel.findById(req.params.id).populate("assignedTo","name email profileImageurl");
+
+        res.json({message:"task checklist updated", task: updatedTask})
+
+
 
     }catch(error){
         res.status(500).json({message:"server error",error: error.message})
@@ -207,6 +277,57 @@ const updateTaskChecklist = async (req, res) => {
 
 const getDashboardData = async (req, res) => {
     try{
+        const totalTasks = await TaskModel.countDocuments();
+        const pendingTasks = await TaskModel.countDocuments({status:"Pending"});
+        const completedTasks = await TaskModel.countDocuments({status:"Completed"});
+        const overdueTasks = await TaskModel.countDocuments({
+            status:{$ne:"Completed"},
+            dueDate:{$lt: new Date()}
+        })
+
+        // Ensure all possible statuses are included
+        const taskStatuses = ["Pending", "In Progress", "Completed"];
+        const taskDistributionRaw = await TaskModel.aggregate([
+            {
+                $group:{
+                    _id:"$status",
+                    count:{$sum : 1}
+                }
+            }
+        ]);
+        console.log(taskDistributionRaw);
+        const taskDistribution = taskStatuses.reduce((acc, status) => {
+            const formattedKey = status.replace(/\s+/g, "");
+            acc[formattedKey] = taskDistributionRaw.find((item) => item._id === status)?.count || 0;
+            return acc;
+        },{});
+
+        taskDistribution["All"] = totalTasks;
+
+        // Ensure all priority levels are included
+        const taskPriorities = ["Low", "Medium","High"];
+        const TaskPriorityLevelRaw = await TaskModel.aggregate([
+            {$group:{_id:"$priority",count:{$sum:1}}}
+        ]);
+        const taskPriorityLevels = taskPriorities.reduce((acc, priority) =>{
+            acc[priority] = TaskPriorityLevelRaw.find((item) => item._id === priority)?.count || 0;
+            return acc;
+        },{});
+
+        const recentTasks = TaskModel.sort({createdAt : -1}).limit(10).select("title status priority dueDate createdAt");
+        res.status(200).json({
+            statistics:{
+                totalTasks,
+                pendingTasks,
+                completedTasks,
+                overdueTasks
+            },
+            charts:{
+                taskDistribution,
+                taskPriorityLevels
+            },
+            recentTasks
+        })
 
     }catch(error){
         res.status(500).json({message:"server error",error: error.message})
@@ -219,6 +340,33 @@ const getDashboardData = async (req, res) => {
 
 const getUserDashboardData = async (req, res) => {
     try{
+        const userId = req.user._id; // Only fetvh data for the logged in user
+
+        //Fetch statistics for user-specific tasks
+
+        const totalTasks = await TaskModel.countDocuments({assignedTo : userId});
+        const PendingTasks = await TaskModel.countDocuments({assignedTo : userId, status: "Pending"});
+        const completedTasks = await TaskModel.countDocuments({assignedTo : userId, status: "Completed"});
+        const overdueTasks = await TaskModel.countDocuments({
+            assignedTo : userId, 
+            status:{ $ne:"Completed" },
+            dueDate:{ $lt: new Date() }
+        });
+
+        // Task distribution by stauses
+        const taskStatuses = ["Pending", "In Progress", "Completed"];
+        const taskDistributionRaw = await TaskModel.aggregate([
+            {$match:{assignedTo : userId}},
+            {$group:{
+                _id:"$status",
+                count:{$sum : 1}
+            }}
+        ]);
+
+        const taskDistribution = taskStatuses.reduce((acc,status) => {
+            const  formattedKey = 
+        },{})
+
 
     }catch(error){
         res.status(500).json({message:"server error",error: error.message})
