@@ -24,11 +24,11 @@ export default function SignIn(){
                     </div> */}
                     <div className="space-y-2">
                         <Label htmlFor="email" className="text-gray-700">Email:</Label>
-                        <Input id="email" type="email" placeholder="john@example.com" required className="border-gray-300 focus:border-primary focus:ring-primary"></Input>
+                        <Input id="email" type="email" placeholder="john@example.com" required  className="border-gray-300 focus:border-primary focus:ring-primary"></Input>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="password" className="text-gray-700" >Password:</Label>
-                        <Input id="password" type="password"  required className="border-gray-300 focus:border-primary focus:ring-primary"></Input>
+                        <Input id="password" type="password"  required minLength={8} className="border-gray-300 focus:border-primary focus:ring-primary"></Input>
                     </div>
                 </CardContent>
                 <CardFooter  className="flex flex-col space-y-4 border-none bg-white">
