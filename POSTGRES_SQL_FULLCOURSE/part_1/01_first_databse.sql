@@ -6,3 +6,5 @@ DROP DATABASE IF EXISTS firsttest;
 
 CREATE DATABASE firsttest;
 
+-- Tables connected using relationships
+

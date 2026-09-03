@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-
+// import dns from "dns";
+// dns.setServers(["8.8.8.8", "8.8.4.4"]);
 const MONGODB_URI = process.env.MONGODB_URI;
 
 interface MongooseCache {
@@ -31,6 +32,7 @@ async function connectDB() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
+      // family:4
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
